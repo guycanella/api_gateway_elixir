@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: api_gateway_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: api_gateway_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - api_gateway_network
+
+  # Descomente quando tiver a aplicação Elixir pronta
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: api_gateway_app
+  #   environment:
+  #     DATABASE_URL: ecto://postgres:postgres@postgres:5432/api_gateway_dev
+  #     SECRET_KEY_BASE: sua_chave_secreta_aqui
+  #     PHX_HOST: localhost
+  #     PORT: 4000
+  #   ports:
+  #     - "4000:4000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   volumes:
+  #     - .:/app
+  #   networks:
+  #     - api_gateway_network
+  #   command: mix phx.server
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  api_gateway_network:
+    driver: bridge
