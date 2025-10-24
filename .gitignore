@@ -28,7 +28,6 @@ Thumbs.db
 # Database
 *.dump
 *.sql
-DB_OVERVIEW.md
 
 # Docker
 docker-compose.override.yml
@@ -36,3 +35,8 @@ docker-compose.override.yml
 # Logs
 *.log
 logs/
+
+# Project
+DB_OVERVIEW.md
+PROJECT_CONTEXT.md
+PROJECT_DESC.md
