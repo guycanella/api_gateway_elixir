@@ -29,7 +29,8 @@ defmodule GatewayDb.MixProject do
     [
       {:ecto_sql, "~> 3.13"},
       {:postgrex, "~> 0.19"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      {:cloak_ecto, "~> 1.3"}
     ]
   end
 
