@@ -59,14 +59,7 @@ config :logger, :default_formatter,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-# Import environment specific config. This must remain at the bottom
-# of this file so it overrides the configuration defined above.
-import_config "#{config_env()}.exs"
+config :gateway_db,
+  ecto_repos: [GatewayDb.Repo]
 
-# Sample configuration:
-#
-#     config :logger, :console,
-#       level: :info,
-#       format: "$date $time [$level] $metadata$message\n",
-#       metadata: [:user_id]
-#
+import_config "#{config_env()}.exs"
