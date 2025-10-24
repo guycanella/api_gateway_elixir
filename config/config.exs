@@ -62,4 +62,13 @@ config :phoenix, :json_library, Jason
 config :gateway_db,
   ecto_repos: [GatewayDb.Repo]
 
+config :gateway_db, GatewayDb.Vault,
+  ciphers: [
+    default: {
+      Cloak.Ciphers.AES.GCM,
+      tag: "AES.GCM.V1",
+      key: Base.decode64!(System.get_env("CLOAK_KEY") || "")
+    }
+  ]
+
 import_config "#{config_env()}.exs"
