@@ -1,0 +1,37 @@
+# Elixir
+/_build/
+/deps/
+*.ez
+*.beam
+/config/*.secret.exs
+.fetch
+
+# Phoenix
+/priv/static/
+erl_crash.dump
+
+# Environment variables
+.env
+.env.local
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.dump
+*.sql
+
+# Docker
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
