@@ -28,6 +28,7 @@ Thumbs.db
 # Database
 *.dump
 *.sql
+DB_OVERVIEW.md
 
 # Docker
 docker-compose.override.yml
