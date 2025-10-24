@@ -1,6 +1,4 @@
 defmodule GatewayDb.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
   @moduledoc false
 
   use Application
@@ -8,7 +6,8 @@ defmodule GatewayDb.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      GatewayDb.Repo
+        GatewayDb.Vault,
+        GatewayDb.Repo
       ]
 
       opts = [strategy: :one_for_one, name: GatewayDb.Supervisor]
