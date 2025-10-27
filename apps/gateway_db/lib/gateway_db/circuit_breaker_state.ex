@@ -37,7 +37,7 @@ defmodule GatewayDb.CircuitBreakerState do
   end
 
   def record_failure_changeset(circuit_breaker) do
-    now = DateTime.utc_now()
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     circuit_breaker
     |> change(%{
@@ -48,7 +48,7 @@ defmodule GatewayDb.CircuitBreakerState do
 
   def open_changeset(circuit_breaker, opts \\ []) do
     retry_after_seconds = Keyword.get(opts, :retry_after_seconds, 60)
-    now = DateTime.utc_now()
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
     next_retry = DateTime.add(now, retry_after_seconds, :second)
 
     circuit_breaker
@@ -58,6 +58,7 @@ defmodule GatewayDb.CircuitBreakerState do
       next_retry_at: next_retry
     })
   end
+
 
   def close_changeset(circuit_breaker) do
     circuit_breaker
@@ -79,16 +80,26 @@ defmodule GatewayDb.CircuitBreakerState do
   end
 
   defp validate_state_consistency(changeset) do
-    state = get_field(changeset, :state)
+    state = get_change(changeset, :state) || get_field(changeset, :state)
 
     case state do
       "open" ->
         changeset
-        |> validate_required([:opened_at, :next_retry_at],
-             message: "must be present when state = 'open'")
+        |> validate_required_when_open(:opened_at)
+        |> validate_required_when_open(:next_retry_at)
 
       _ ->
         changeset
+    end
+  end
+
+  defp validate_required_when_open(changeset, field) do
+    value = get_change(changeset, field) || get_field(changeset, field)
+
+    if value == nil do
+      add_error(changeset, field, "must be present when state = 'open'")
+    else
+      changeset
     end
   end
 
