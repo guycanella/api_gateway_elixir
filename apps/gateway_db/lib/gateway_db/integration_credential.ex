@@ -39,19 +39,20 @@ defmodule GatewayDb.IntegrationCredential do
   def update_credentials_changeset(credential, attrs) do
     credential
     |> cast(attrs, [:api_key, :api_secret, :extra_credentials, :expires_at])
+    |> validate_required([:api_key])
     |> validate_length(:api_key, min: 1, message: "cannot be empty")
     |> validate_expiration_date()
   end
 
   defp validate_expiration_date(changeset) do
-    validate_change(changeset, :expires_at, fn _, expires_at ->
+    validate_change(changeset, :expires_at, fn :expires_at, expires_at ->
       if expires_at do
         now = DateTime.utc_now()
 
         if DateTime.compare(expires_at, now) == :gt do
           []
         else
-          [:expires_at, "should be a future date"]
+          [{:expires_at, "should be a future date"}]
         end
       else
         []
