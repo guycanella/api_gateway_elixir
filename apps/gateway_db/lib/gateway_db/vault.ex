@@ -3,16 +3,19 @@ defmodule GatewayDb.Vault do
 
   @impl GenServer
   def init(config) do
-    config =
-      Keyword.put(config, :ciphers,
+    ciphers = Keyword.get_lazy(config, :ciphers, fn ->
+      [
         default: {
           Cloak.Ciphers.AES.GCM,
           tag: "AES.GCM.V1",
           key: decode_env!("CLOAK_KEY")
         }
-      )
+      ]
+    end)
 
-      {:ok, config}
+    config = Keyword.put(config, :ciphers, ciphers)
+
+    {:ok, config}
   end
 
   defp decode_env!(var) do
