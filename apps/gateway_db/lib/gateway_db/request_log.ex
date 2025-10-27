@@ -54,9 +54,9 @@ defmodule GatewayDb.RequestLog do
 
 
   defp validate_http_status(changeset) do
-    validate_change(changeset, :response_status, fn _, status ->
+    validate_change(changeset, :response_status, fn :response_status, status ->
       if status && (status < 100 || status > 599) do
-        [:response_status, "should be a valid HTTP status code (100-599)"]
+        [{:response_status, "should be a valid HTTP status code (100-599)"}]
       else
         []
       end
@@ -64,9 +64,9 @@ defmodule GatewayDb.RequestLog do
   end
 
   defp validate_duration(changeset) do
-    validate_change(changeset, :duration_ms, fn _, duration ->
+    validate_change(changeset, :duration_ms, fn :duration_ms, duration ->
       if duration && duration < 0 do
-        [:duration_ms, "should be a positive value"]
+        [{:duration_ms, "should be a positive value"}]
       else
         []
       end
@@ -74,9 +74,9 @@ defmodule GatewayDb.RequestLog do
   end
 
   defp validate_request_id_format(changeset) do
-    validate_change(changeset, :request_id, fn _, request_id ->
+    validate_change(changeset, :request_id, fn :request_id, request_id ->
       if String.trim(request_id) == "" do
-        [:request_id, "cannot be empty"]
+        [{:request_id, "can't be blank"}]
       else
         []
       end
