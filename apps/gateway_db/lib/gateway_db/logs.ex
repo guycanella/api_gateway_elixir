@@ -131,7 +131,7 @@ defmodule GatewayDb.Logs do
     |> apply_filters(rest)
   end
 
-  defp apply_filters(query, [{:status_range, first..last} | rest]) do
+  defp apply_filters(query, [{:status_range, first..last//step} | rest]) when step == 1 do
     query
     |> where([l], l.response_status >= ^first and l.response_status <= ^last)
     |> apply_filters(rest)
