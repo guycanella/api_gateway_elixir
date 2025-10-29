@@ -16,6 +16,8 @@ defmodule ApiGatewayElixir.MixProject do
   #
   # Run "mix help deps" for examples and options.
   defp deps do
-    []
+    [
+      {:faker, "~> 0.18", only: [:dev, :test]}
+    ]
   end
 end
