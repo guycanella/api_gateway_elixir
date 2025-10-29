@@ -1,2 +1,0 @@
-defmodule GatewayDbTest do
-end
