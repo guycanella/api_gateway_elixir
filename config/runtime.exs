@@ -4,6 +4,23 @@ if System.get_env("PHX_SERVER") do
   config :gateway_web, GatewayWebWeb.Endpoint, server: true
 end
 
+if config_env() == :dev do
+  cloak_key = System.get_env("CLOAK_KEY")
+
+  if cloak_key do
+    config :gateway_db, GatewayDb.Vault,
+      ciphers: [
+        default: {
+          Cloak.Ciphers.AES.GCM,
+          tag: "AES.GCM.V1",
+          key: Base.decode64!(cloak_key)
+        }
+      ]
+  else
+    IO.warn("⚠️  CLOAK_KEY not set! Encryption will not work.")
+  end
+end
+
 if config_env() == :test do
   config :gateway_db, GatewayDb.Vault,
     ciphers: [
