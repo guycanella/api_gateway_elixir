@@ -117,7 +117,7 @@ defmodule GatewayDb.CircuitBreakers do
     update_state(state, attrs)
   end
 
-  def open_circuit(integration_id, opts \\ []) do
+  def open_circuit(integration_id, opts) when is_list(opts) do
     timeout = Keyword.get(opts, :timeout, @default_timeout_seconds)
     {:ok, state} = get_or_initialize_state(integration_id)
 
@@ -128,6 +128,19 @@ defmodule GatewayDb.CircuitBreakers do
       state: "open",
       opened_at: now,
       next_retry_at: next_retry
+    }
+
+    update_state(state, attrs)
+  end
+
+  def open_circuit(integration_id, %DateTime{} = next_retry_at) do
+    {:ok, state} = get_or_initialize_state(integration_id)
+    now = DateTime.utc_now()
+
+    attrs = %{
+      state: "open",
+      opened_at: now,
+      next_retry_at: next_retry_at
     }
 
     update_state(state, attrs)
@@ -172,6 +185,50 @@ defmodule GatewayDb.CircuitBreakers do
       next_retry_at: nil,
       updated_at: DateTime.utc_now()
     ])
+  end
+
+  def transition_to_half_open(integration_id) do
+    half_open_circuit(integration_id)
+  end
+
+  def reset_failures(integration_id) do
+    {:ok, state} = get_or_initialize_state(integration_id)
+
+    attrs = %{
+      failure_count: 0,
+      last_failure_at: nil
+    }
+
+    update_state(state, attrs)
+  end
+
+  def increment_failure(integration_id, error_message) when is_binary(error_message) do
+    {:ok, state} = get_or_initialize_state(integration_id)
+    now = DateTime.utc_now()
+
+    attrs = %{
+      failure_count: state.failure_count + 1,
+      last_failure_at: now
+    }
+
+    update_state(state, attrs)
+  end
+
+  def create_state(integration_id, initial_state)
+      when initial_state in ["closed", "open", "half_open"] do
+    attrs = %{
+      integration_id: integration_id,
+      state: initial_state,
+      failure_count: 0
+    }
+
+    %CircuitBreakerState{}
+    |> CircuitBreakerState.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def reset_state(integration_id) do
+    close_circuit(integration_id)
   end
 
   def close_expired_circuits do
