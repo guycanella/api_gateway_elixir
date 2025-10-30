@@ -1,6 +1,7 @@
 defmodule GatewayIntegrations.HttpClient do
   require Logger
   alias GatewayDb.{Logs, Integrations}
+  alias Finch
 
   @type http_method :: :get | :post | :put | :patch | :delete
   @type url :: String.t()
@@ -70,7 +71,10 @@ defmodule GatewayIntegrations.HttpClient do
     duration = System.monotonic_time(:millisecond) - start_time
 
     case result do
-      {:ok, %Finch.Response{status: status, body: response_body, headers: response_headers}} ->
+      {:ok, response} ->
+        status = response.status
+        response_body = response.body
+        response_headers = response.headers
         parsed_response = parse_response_body(response_body)
 
         Logger.info("HTTP Response: #{status}",
@@ -84,7 +88,7 @@ defmodule GatewayIntegrations.HttpClient do
                      status, response_headers, parsed_response, duration, nil)
         end
 
-        response = %{
+        response_map = %{
           status: status,
           body: parsed_response,
           headers: response_headers
@@ -93,37 +97,22 @@ defmodule GatewayIntegrations.HttpClient do
         if status >= 400 do
           {:error, {:http_error, status}}
         else
-          {:ok, response}
+          {:ok, response_map}
         end
 
-      {:error, %Mint.TransportError{reason: :timeout}} ->
-        Logger.error("HTTP Request timeout",
-          request_id: request_id,
-          duration_ms: duration
-        )
-
-        if integration_id = Keyword.get(opts, :integration_id) do
-          log_request(integration_id, request_id, method, endpoint, headers, body,
-                     nil, [], %{}, duration, "Request timeout after #{timeout}ms")
+      {:error, error} ->
+        # Check error reason
+        reason = case error do
+          %{reason: :timeout} -> :timeout
+          %{reason: :econnrefused} -> :connection_refused
+          _ -> error
         end
 
-        {:error, :timeout}
-
-      {:error, %Mint.TransportError{reason: :econnrefused}} ->
-        Logger.error("HTTP Connection refused",
-          request_id: request_id,
-          duration_ms: duration
-        )
-
-        if integration_id = Keyword.get(opts, :integration_id) do
-          log_request(integration_id, request_id, method, endpoint, headers, body,
-                     nil, [], %{}, duration, "Connection refused")
+        error_message = case reason do
+          :timeout -> "Request timeout after #{timeout}ms"
+          :connection_refused -> "Connection refused"
+          _ -> inspect(error)
         end
-
-        {:error, :connection_refused}
-
-      {:error, reason} ->
-        error_message = inspect(reason)
 
         Logger.error("HTTP Request failed: #{error_message}",
           request_id: request_id,
