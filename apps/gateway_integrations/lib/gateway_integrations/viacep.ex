@@ -5,11 +5,17 @@ defmodule GatewayIntegrations.ViaCep do
   @base_url "https://viacep.com.br/ws"
 
   @spec get_address(String.t(), keyword()) :: {:ok, map()} | {:error, atom() | term()}
+
   def get_address(cep, opts \\ []) do
     with {:ok, normalized_cep} <- normalize_cep(cep),
          {:ok, integration_id} <- get_integration_id(),
          {:ok, response} <- make_request(normalized_cep, integration_id, opts) do
-      {:ok, normalize_response(response.body)}
+      normalized = normalize_response(response.body)
+
+      case map_size(normalized) do
+        0 -> {:error, :not_found}
+        _ -> {:ok, normalized}
+      end
     end
   end
 
@@ -70,6 +76,9 @@ defmodule GatewayIntegrations.ViaCep do
 
     case HttpClient.get(url, request_opts) do
       {:ok, %{body: %{"erro" => true}}} ->
+        {:error, :not_found}
+
+      {:ok, %{body: body}} when body == %{} or map_size(body) == 0 ->
         {:error, :not_found}
 
       {:ok, response} ->
