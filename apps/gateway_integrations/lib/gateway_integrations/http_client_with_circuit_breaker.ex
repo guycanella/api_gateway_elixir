@@ -1,6 +1,7 @@
 defmodule GatewayIntegrations.HttpClient do
   require Logger
   alias GatewayDb.{Logs, Integrations}
+  alias GatewayIntegrations.CircuitBreaker
   alias Finch
 
   @type http_method :: :get | :post | :put | :patch | :delete
@@ -19,6 +20,7 @@ defmodule GatewayIntegrations.HttpClient do
     :timeout
     | :connection_refused
     | :invalid_response
+    | :circuit_breaker_open
     | {:http_error, integer()}
     | term()
 
@@ -49,6 +51,28 @@ defmodule GatewayIntegrations.HttpClient do
 
   @spec request(http_method(), url(), body(), opts()) :: {:ok, response()} | {:error, error_reason()}
   defp request(method, url, body, opts) do
+    integration_id = Keyword.get(opts, :integration_id)
+
+    # Check circuit breaker before making request
+    case check_circuit_breaker(integration_id) do
+      :allow ->
+        execute_request(method, url, body, opts, integration_id)
+
+      {:deny, reason} ->
+        Logger.warning("Request blocked by circuit breaker",
+          integration_id: integration_id,
+          reason: reason
+        )
+        {:error, :circuit_breaker_open}
+    end
+  end
+
+  defp check_circuit_breaker(nil), do: :allow
+  defp check_circuit_breaker(integration_id) do
+    CircuitBreaker.check_request(integration_id)
+  end
+
+  defp execute_request(method, url, body, opts, integration_id) do
     request_id = generate_request_id()
     start_time = System.monotonic_time(:millisecond)
 
@@ -72,60 +96,88 @@ defmodule GatewayIntegrations.HttpClient do
 
     case result do
       {:ok, response} ->
-        status = response.status
-        response_body = response.body
-        response_headers = response.headers
-        parsed_response = parse_response_body(response_body)
-
-        Logger.info("HTTP Response: #{status}",
-          request_id: request_id,
-          status: status,
-          duration_ms: duration
-        )
-
-        if integration_id = Keyword.get(opts, :integration_id) do
-          log_request(integration_id, request_id, method, endpoint, headers, body,
-                     status, response_headers, parsed_response, duration, nil)
-        end
-
-        response_map = %{
-          status: status,
-          body: parsed_response,
-          headers: response_headers
-        }
-
-        if status >= 400 do
-          {:error, {:http_error, status}}
-        else
-          {:ok, response_map}
-        end
+        handle_success_response(response, method, url, body, headers, opts,
+                               request_id, endpoint, duration, integration_id)
 
       {:error, error} ->
-        # Check error reason
-        reason = case error do
-          %{reason: :timeout} -> :timeout
-          %{reason: :econnrefused} -> :connection_refused
-          _ -> error
-        end
-
-        error_message = case reason do
-          :timeout -> "Request timeout after #{timeout}ms"
-          :connection_refused -> "Connection refused"
-          _ -> inspect(error)
-        end
-
-        Logger.error("HTTP Request failed: #{error_message}",
-          request_id: request_id,
-          duration_ms: duration
-        )
-
-        if integration_id = Keyword.get(opts, :integration_id) do
-          log_request(integration_id, request_id, method, endpoint, headers, body,
-                     nil, [], %{}, duration, error_message)
-        end
-
-        {:error, reason}
+        handle_error_response(error, method, url, body, headers, opts,
+                             request_id, endpoint, duration, integration_id, timeout)
     end
+  end
+
+  defp handle_success_response(response, _method, _url, body, headers, opts,
+                               request_id, endpoint, duration, integration_id) do
+    status = response.status
+    response_body = response.body
+    response_headers = response.headers
+    parsed_response = parse_response_body(response_body)
+
+    Logger.info("HTTP Response: #{status}",
+      request_id: request_id,
+      status: status,
+      duration_ms: duration
+    )
+
+    # Log to database
+    if integration_id do
+      log_request(integration_id, request_id, opts[:method] || :get, endpoint, headers, body,
+                 status, response_headers, parsed_response, duration, nil)
+    end
+
+    response_map = %{
+      status: status,
+      body: parsed_response,
+      headers: response_headers
+    }
+
+    # Check if response indicates error
+    if status >= 400 do
+      # Record failure in circuit breaker
+      if integration_id do
+        CircuitBreaker.record_failure(integration_id, "HTTP #{status}")
+      end
+      {:error, {:http_error, status}}
+    else
+      # Record success in circuit breaker
+      if integration_id do
+        CircuitBreaker.record_success(integration_id)
+      end
+      {:ok, response_map}
+    end
+  end
+
+  defp handle_error_response(error, method, _url, body, headers, _opts,
+                             request_id, endpoint, duration, integration_id, timeout) do
+    # Check error reason
+    reason = case error do
+      %{reason: :timeout} -> :timeout
+      %{reason: :econnrefused} -> :connection_refused
+      _ -> error
+    end
+
+    error_message = case reason do
+      :timeout -> "Request timeout after #{timeout}ms"
+      :connection_refused -> "Connection refused"
+      _ -> inspect(error)
+    end
+
+    Logger.error("HTTP Request failed: #{error_message}",
+      request_id: request_id,
+      duration_ms: duration
+    )
+
+    # Log to database
+    if integration_id do
+      log_request(integration_id, request_id, method, endpoint, headers, body,
+                 nil, [], %{}, duration, error_message)
+    end
+
+    # Record failure in circuit breaker
+    if integration_id do
+      CircuitBreaker.record_failure(integration_id, error_message)
+    end
+
+    {:error, reason}
   end
 
   defp build_finch_request(method, url, headers, nil) do
