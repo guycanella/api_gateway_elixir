@@ -31,7 +31,8 @@ defmodule GatewayIntegrations.MixProject do
       {:tesla, "~> 1.8.0"},
       {:fuse, "~> 2.5"},
       {:retry, "~> 0.19.0"},
-      {:gateway_db, in_umbrella: true}
+      {:gateway_db, in_umbrella: true},
+      {:mox, "~> 1.0", only: :test}
     ]
   end
 end
