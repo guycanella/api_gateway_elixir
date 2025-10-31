@@ -117,6 +117,10 @@ defmodule GatewayDb.CircuitBreakers do
     update_state(state, attrs)
   end
 
+  def open_circuit(integration_id) do
+    open_circuit(integration_id, [])
+  end
+
   def open_circuit(integration_id, opts) when is_list(opts) do
     timeout = Keyword.get(opts, :timeout, @default_timeout_seconds)
     {:ok, state} = get_or_initialize_state(integration_id)
