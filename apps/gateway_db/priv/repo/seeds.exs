@@ -90,6 +90,7 @@ Logger.info("✅ Created #{length(integrations)} integrations")
 # ==========================================
 
 Logger.info("🔐 Creating credentials...")
+openweather_api_key = System.get_env("OPENWEATHER_API_KEY") || "fake_key_replace_me"
 
 credentials_data = [
   # Stripe
@@ -109,8 +110,8 @@ credentials_data = [
   {viacep, "development", "public_api_no_key", "no_secret_needed"},
 
   # OpenWeather - ⚠️ Replace with your actual API key!
-  {openweather, "production", "7120f71d86d3b8b11f5bad7b5cc8765b", "no_secret_needed"},
-  {openweather, "development", "7120f71d86d3b8b11f5bad7b5cc8765b", "no_secret_needed"}
+  {openweather, "production", openweather_api_key, "no_secret_needed"},
+  {openweather, "development", openweather_api_key, "no_secret_needed"}
 ]
 
 credentials = Enum.map(credentials_data, fn {integration, env, key, secret} ->
