@@ -48,15 +48,31 @@ test: ## Run tests (all tests or specific file with FILE=name)
 		mix test; \
 	else \
 		echo "🔍 Procurando arquivo de teste: $(FILE)..."; \
-		TEST_FILE=$$(find apps/*/test -type f -name "*$(FILE)*_test.exs" | head -n 1); \
-		if [ -z "$$TEST_FILE" ]; then \
-			echo "❌ Arquivo de teste não encontrado: $(FILE)"; \
-			echo "💡 Dica: use apenas parte do nome (ex: make test FILE=integration)"; \
-			exit 1; \
-		else \
-			echo "✅ Encontrado: $$TEST_FILE"; \
+		EXACT_MATCH=$$(find apps/*/test -type f -name "$(FILE)_test.exs" | head -n 1); \
+		if [ -n "$$EXACT_MATCH" ]; then \
+			echo "✅ Match exato encontrado: $$EXACT_MATCH"; \
 			echo "🧪 Rodando teste..."; \
-			mix test $$TEST_FILE; \
+			mix test $$EXACT_MATCH; \
+		else \
+			TEST_FILES=$$(find apps/*/test -type f -name "*$(FILE)*_test.exs"); \
+			TEST_COUNT=$$(echo "$$TEST_FILES" | grep -c . || echo 0); \
+			if [ -z "$$TEST_FILES" ]; then \
+				echo "❌ Arquivo de teste não encontrado: $(FILE)"; \
+				echo "💡 Dica: use apenas parte do nome (ex: make test FILE=integration)"; \
+				exit 1; \
+			elif [ $$TEST_COUNT -gt 1 ]; then \
+				echo "⚠️  Múltiplos arquivos encontrados:"; \
+				echo "$$TEST_FILES" | nl; \
+				echo ""; \
+				echo "💡 Seja mais específico ou use o nome exato:"; \
+				echo "   make test FILE=circuit_breaker           (busca circuit_breaker_test.exs primeiro)"; \
+				echo "   make test FILE=circuit_breaker_state     (busca circuit_breaker_state_test.exs)"; \
+				exit 1; \
+			else \
+				echo "✅ Encontrado: $$TEST_FILES"; \
+				echo "🧪 Rodando teste..."; \
+				mix test $$TEST_FILES; \
+			fi \
 		fi \
 	fi
 
