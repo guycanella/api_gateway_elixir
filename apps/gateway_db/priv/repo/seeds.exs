@@ -6,12 +6,21 @@ require Logger
 
 Logger.info("🌱 Starting seeds...")
 
+# ==========================================
+# CLEANUP - Delete existing data
+# ==========================================
+
 Repo.delete_all(CircuitBreakerState)
 Repo.delete_all(RequestLog)
 Repo.delete_all(IntegrationCredential)
 Repo.delete_all(Integration)
 
 Logger.info("🧹 Cleaned existing data")
+
+# ==========================================
+# INTEGRATIONS - Create integrations
+# ==========================================
+
 Logger.info("📦 Creating integrations...")
 
 stripe = Repo.insert!(%Integration{
@@ -20,8 +29,8 @@ stripe = Repo.insert!(%Integration{
   base_url: "https://api.stripe.com",
   is_active: true,
   config: %{
-    "timeout" => 5000,
-    "rate_limit" => 100,
+    "timeout_ms" => 5000,
+    "rate_limit_per_minute" => 100,
     "retry_attempts" => 3
   }
 })
@@ -32,8 +41,8 @@ sendgrid = Repo.insert!(%Integration{
   base_url: "https://api.sendgrid.com",
   is_active: true,
   config: %{
-    "timeout" => 3000,
-    "rate_limit" => 50
+    "timeout_ms" => 3000,
+    "rate_limit_per_minute" => 50
   }
 })
 
@@ -43,53 +52,65 @@ twilio = Repo.insert!(%Integration{
   base_url: "https://api.twilio.com",
   is_active: true,
   config: %{
-    "timeout" => 4000,
-    "rate_limit" => 30
+    "timeout_ms" => 4000,
+    "rate_limit_per_minute" => 30
   }
 })
 
 viacep = Repo.insert!(%Integration{
   name: "viacep",
-  type: "address",
+  type: "other",
   base_url: "https://viacep.com.br/ws",
   is_active: true,
   config: %{
-    "timeout" => 2000,
-    "rate_limit" => 200
+    "timeout_ms" => 2000,
+    "rate_limit_per_minute" => 200
   }
 })
 
 openweather = Repo.insert!(%Integration{
   name: "openweather",
-  type: "weather",
-  base_url: "https://api.openweathermap.org",
-  is_active: false,  # Inactive for testing
+  type: "other",
+  base_url: "https://api.openweathermap.org/data/2.5",
+  is_active: true,
   config: %{
-    "timeout" => 3000,
-    "rate_limit" => 60
+    "timeout_ms" => 5000,
+    "rate_limit_per_minute" => 60,
+    "units" => "metric",
+    "language" => "pt_br"
   }
 })
 
 integrations = [stripe, sendgrid, twilio, viacep, openweather]
 
 Logger.info("✅ Created #{length(integrations)} integrations")
+
+# ==========================================
+# CREDENTIALS - Create encrypted credentials
+# ==========================================
+
 Logger.info("🔐 Creating credentials...")
 
 credentials_data = [
+  # Stripe
   {stripe, "production", "sk_live_test_fake_key_abc123", "whsec_fake_secret_xyz789"},
   {stripe, "development", "sk_test_fake_key_dev456", "whsec_fake_secret_dev123"},
 
+  # SendGrid
   {sendgrid, "production", "SG.fake_key_production_xyz", "fake_secret_prod_789"},
   {sendgrid, "development", "SG.fake_key_development_abc", "fake_secret_dev_456"},
 
+  # Twilio
   {twilio, "production", "AC_fake_account_sid_prod", "fake_auth_token_prod_123"},
   {twilio, "development", "AC_fake_account_sid_dev", "fake_auth_token_dev_456"},
 
+  # ViaCEP (public API - no real key needed)
   {viacep, "production", "public_api_no_key", "no_secret_needed"},
   {viacep, "development", "public_api_no_key", "no_secret_needed"},
 
-  {openweather, "production", "fake_api_key_openweather_prod", "fake_secret_weather_123"},
-  {openweather, "development", "fake_api_key_openweather_dev", "fake_secret_weather_456"}
+  # OpenWeather - ⚠️ Replace with your actual API key!
+  {openweather, "production", "7120f71d86d3b8b11f5bad7b5cc8765b", "no_secret_needed"},
+  {openweather, "development", "7120f71d86d3b8b11f5bad7b5cc8765b", "no_secret_needed"}
 ]
 
 credentials = Enum.map(credentials_data, fn {integration, env, key, secret} ->
@@ -114,6 +135,11 @@ credentials = Enum.map(credentials_data, fn {integration, env, key, secret} ->
 end)
 
 Logger.info("✅ Created #{length(credentials)} credentials")
+
+# ==========================================
+# REQUEST LOGS - Create fake request logs
+# ==========================================
+
 Logger.info("📝 Creating request logs...")
 
 defmodule SeedHelper do
@@ -140,7 +166,7 @@ defmodule SeedHelper do
         integration_id: integration.id,
         request_id: "req_#{integration.name}_#{Faker.UUID.v4() |> String.slice(0..7)}",
         method: method,
-        endpoint: generate_endpoint(integration.type, method),
+        endpoint: generate_endpoint(integration.name, method),
         request_headers: generate_headers(),
         request_body: generate_request_body(method, integration.type),
         response_status: status,
@@ -153,21 +179,21 @@ defmodule SeedHelper do
     end)
   end
 
-  defp generate_endpoint("payment", "POST"), do: "/v1/charges"
-  defp generate_endpoint("payment", "GET"), do: "/v1/charges/#{Faker.random_between(1000, 9999)}"
-  defp generate_endpoint("payment", _), do: "/v1/customers"
+  defp generate_endpoint("stripe", "POST"), do: "/v1/charges"
+  defp generate_endpoint("stripe", "GET"), do: "/v1/charges/#{Faker.random_between(1000, 9999)}"
+  defp generate_endpoint("stripe", _), do: "/v1/customers"
 
-  defp generate_endpoint("email", "POST"), do: "/v3/mail/send"
-  defp generate_endpoint("email", "GET"), do: "/v3/templates"
-  defp generate_endpoint("email", _), do: "/v3/stats"
+  defp generate_endpoint("sendgrid", "POST"), do: "/v3/mail/send"
+  defp generate_endpoint("sendgrid", "GET"), do: "/v3/templates"
+  defp generate_endpoint("sendgrid", _), do: "/v3/stats"
 
-  defp generate_endpoint("sms", "POST"), do: "/2010-04-01/Accounts/#{Faker.UUID.v4() |> String.slice(0..10)}/Messages.json"
-  defp generate_endpoint("sms", "GET"), do: "/2010-04-01/Accounts/#{Faker.UUID.v4() |> String.slice(0..10)}/Messages"
-  defp generate_endpoint("sms", _), do: "/2010-04-01/Accounts"
+  defp generate_endpoint("twilio", "POST"), do: "/2010-04-01/Accounts/#{Faker.UUID.v4() |> String.slice(0..10)}/Messages.json"
+  defp generate_endpoint("twilio", "GET"), do: "/2010-04-01/Accounts/#{Faker.UUID.v4() |> String.slice(0..10)}/Messages"
+  defp generate_endpoint("twilio", _), do: "/2010-04-01/Accounts"
 
-  defp generate_endpoint("address", _), do: "/#{Faker.random_between(10000, 99999)}/json"
+  defp generate_endpoint("viacep", _), do: "/#{Faker.random_between(10000, 99999)}/json"
 
-  defp generate_endpoint("weather", _), do: "/data/2.5/weather?q=#{Faker.Address.city()}"
+  defp generate_endpoint("openweather", _), do: "/data/2.5/weather?q=#{Faker.Address.city()}"
 
   defp generate_headers do
     user_agents = [
@@ -246,18 +272,13 @@ defmodule SeedHelper do
     }
   end
 
-  defp generate_response_body(_, "address") do
+  defp generate_response_body(_, "other") do
     %{
       "cep" => "#{Faker.random_between(10000, 99999)}-000",
       "logradouro" => Faker.Address.street_name(),
       "bairro" => Faker.Address.secondary_address(),
       "localidade" => Faker.Address.city(),
-      "uf" => "SP"
-    }
-  end
-
-  defp generate_response_body(_, "weather") do
-    %{
+      "uf" => "SP",
       "temp" => Faker.random_between(15, 35),
       "humidity" => Faker.random_between(30, 90),
       "description" => Enum.random(["clear sky", "few clouds", "scattered clouds", "rain"])
@@ -278,11 +299,15 @@ all_logs = Enum.flat_map(logs_per_integration, fn {integration, count} ->
 end)
 
 Enum.chunk_every(all_logs, 50)
-  |> Enum.each(fn chunk ->
-    Repo.insert_all(RequestLog, chunk)
+|> Enum.each(fn chunk ->
+  Repo.insert_all(RequestLog, chunk)
 end)
 
 Logger.info("✅ Created #{length(all_logs)} request logs")
+
+# ==========================================
+# CIRCUIT BREAKER STATES - Create states
+# ==========================================
 
 Logger.info("🚦 Creating circuit breaker states...")
 
@@ -324,6 +349,11 @@ Repo.insert!(%CircuitBreakerState{
 })
 
 Logger.info("✅ Created 5 circuit breaker states")
+
+# ==========================================
+# SUMMARY
+# ==========================================
+
 Logger.info("""
 
 🎉 Seeds completed successfully!
@@ -338,18 +368,22 @@ Integrations created:
   ✅ stripe (payment) - Active
   ✅ sendgrid (email) - Active
   ✅ twilio (sms) - Active
-  ✅ viacep (address) - Active
-  ⏸️  openweather (weather) - Inactive
+  ✅ viacep (other) - Active
+  ✅ openweather (other) - Active
 
 Circuit Breaker States:
   🟢 stripe: closed (healthy)
   🟢 sendgrid: closed (2 failures)
   🔴 twilio: open (failing - 5 failures)
   🟡 viacep: half_open (testing recovery)
-  🟢 openweather: closed (integration inactive)
+  🟢 openweather: closed (healthy)
 
-You can now:
-  • Query the database: mix ecto.psql
-  • Run the app: mix phx.server
-  • Test the integrations!
+⚠️  Important:
+  • Replace OpenWeather API key in credentials before testing!
+  • Get free key at: https://openweathermap.org/api
+
+Next steps:
+  • Query database: mix ecto.psql
+  • Run app: mix phx.server
+  • Test integrations in IEx!
 """)
